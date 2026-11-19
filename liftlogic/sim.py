@@ -87,6 +87,7 @@ class Stats:
     riding: int
     avg_wait: float
     max_wait: float
+    measured_for: float = 0.0   # seconds since the measurement began
 
 
 class Simulation:
@@ -106,6 +107,9 @@ class Simulation:
         self.waiting: list[list[Passenger]] = [[] for _ in range(self.config.floors)]
         self.passengers: list[Passenger] = []
         self.delivered: list[Passenger] = []
+        self.measure_start = 0.0        # when the current measurement began
+        self._measure_passengers = 0    # passengers who had arrived by then
+        self._measure_delivered = 0     # passengers who had been delivered by then
         self._next_arrival = self._arrival_gap()
 
     # ----------------------------------------------------------- arrivals
@@ -229,13 +233,32 @@ class Simulation:
 
     # -------------------------------------------------------------- stats
 
+    def start_measuring(self) -> None:
+        """Begin a new measurement: the stats forget everything before now.
+
+        The simulation itself carries on untouched. Lifts, riders and people
+        already waiting stay where they are, and the stream of passengers is
+        not affected.
+        """
+        self.measure_start = self.time
+        self._measure_passengers = len(self.passengers)
+        self._measure_delivered = len(self.delivered)
+
     def stats(self) -> Stats:
-        waits = [p.wait(self.time) for p in self.passengers]
+        """Stats for the current measurement (the whole run unless restarted).
+
+        Waits and `spawned` cover passengers who arrived since the measurement
+        began, `delivered` counts arrivals at a destination since then, and
+        `waiting` and `riding` are everyone in the building right now.
+        """
+        measured = self.passengers[self._measure_passengers:]
+        waits = [p.wait(self.time) for p in measured]
         return Stats(
-            spawned=len(self.passengers),
-            delivered=len(self.delivered),
+            spawned=len(measured),
+            delivered=len(self.delivered) - self._measure_delivered,
             waiting=sum(len(q) for q in self.waiting),
             riding=sum(len(lift.riders) for lift in self.lifts),
             avg_wait=sum(waits) / len(waits) if waits else 0.0,
             max_wait=max(waits) if waits else 0.0,
+            measured_for=self.time - self.measure_start,
         )

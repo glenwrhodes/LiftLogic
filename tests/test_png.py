@@ -103,6 +103,49 @@ class TrafficLevelTests(unittest.TestCase):
             seen.append(app.next_traffic(seen[-1]))
         self.assertEqual(seen, ["quiet", "normal", "rush", "quiet"])
 
+    def test_changing_traffic_measures_the_new_level_alone(self):
+        # Ten minutes at Normal, then two minutes of Rush hour.
+        sims = app.make_sims(7)
+        for sim in sims:
+            sim.run(600)
+        app.change_traffic(sims, "rush")
+        for sim in sims:
+            self.assertEqual(sim.arrival_rate, app.traffic_level("rush")[1])
+            self.assertEqual(sim.stats().measured_for, 0.0)
+            self.assertEqual(sim.stats().spawned, 0)
+            sim.run(120)
+
+        for sim in sims:
+            st = sim.stats()
+            self.assertAlmostEqual(st.measured_for, 120.0)
+            new = [p for p in sim.passengers if p.spawn_time > 600]
+            old = [p for p in sim.passengers if p.spawn_time <= 600]
+            self.assertEqual(st.spawned, len(new))
+            self.assertGreater(len(new), 100)       # about 144 expected at 1.2 a second
+            self.assertGreater(len(old), 400)       # about 480 expected at 0.8 a second
+            rush_only = sum(p.wait(sim.time) for p in new) / len(new)
+            blended = sum(p.wait(sim.time) for p in sim.passengers) / len(sim.passengers)
+            self.assertAlmostEqual(st.avg_wait, rush_only)
+            self.assertAlmostEqual(st.max_wait, max(p.wait(sim.time) for p in new))
+            # The whole-run figure is still mostly the old traffic level.
+            self.assertGreater(abs(st.avg_wait - blended), 0.5)
+
+    def test_buildings_share_passengers_through_traffic_changes(self):
+        sims = app.make_sims(7)
+        for name in ("rush", "quiet", "normal", "rush"):
+            for sim in sims:
+                sim.run(45)
+            app.change_traffic(sims, name)
+        for sim in sims:
+            sim.run(45)
+        streams = [[(p.origin, p.dest, p.spawn_time) for p in sim.passengers] for sim in sims]
+        self.assertGreater(len(streams[0]), 100)
+        self.assertEqual(streams[0], streams[1])
+        self.assertEqual(streams[0], streams[2])
+        # All three panels cover the same passengers over the same time.
+        self.assertEqual(len({sim.stats().spawned for sim in sims}), 1)
+        self.assertEqual(len({sim.stats().measured_for for sim in sims}), 1)
+
     def test_unknown_level_is_an_error(self):
         with self.assertRaises(ValueError):
             app.traffic_level("gridlock")

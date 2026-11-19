@@ -142,6 +142,68 @@ class StatsTests(unittest.TestCase):
         self.assertAlmostEqual(st.avg_wait, (0.1 + 9.9) / 2)
 
 
+class MeasurementTests(unittest.TestCase):
+    def test_a_whole_run_is_one_measurement_by_default(self):
+        sim = Simulation(GoTo(None), quiet())
+        sim.run(7)
+        self.assertAlmostEqual(sim.stats().measured_for, 7.0)
+
+    def test_new_measurement_forgets_earlier_passengers(self):
+        sim = Simulation(GoTo(None), quiet())
+        sim.add_passenger(3, 0)             # waits the whole time, never served
+        sim.run(10)
+        self.assertAlmostEqual(sim.stats().max_wait, 10.0)
+
+        sim.start_measuring()
+        st = sim.stats()
+        self.assertEqual((st.spawned, st.delivered), (0, 0))
+        self.assertEqual((st.avg_wait, st.max_wait, st.measured_for), (0.0, 0.0, 0.0))
+        self.assertEqual(st.waiting, 1)     # still standing there, and still shown
+
+        sim.add_passenger(2, 0)
+        sim.run(2)
+        st = sim.stats()
+        self.assertEqual(st.spawned, 1)
+        self.assertAlmostEqual(st.avg_wait, 2.0)
+        self.assertAlmostEqual(st.max_wait, 2.0)
+        self.assertAlmostEqual(st.measured_for, 2.0)
+        self.assertEqual(st.waiting, 2)
+
+    def test_delivered_counts_from_the_start_of_the_measurement(self):
+        scheduler = GoTo(0)
+        sim = Simulation(scheduler, quiet())
+        sim.add_passenger(0, 1)
+        sim.step()
+        scheduler.floor = 1
+        sim.run(4)
+        self.assertEqual(sim.stats().delivered, 1)
+        sim.start_measuring()
+        self.assertEqual(sim.stats().delivered, 0)
+        sim.add_passenger(1, 0)
+        sim.step()
+        scheduler.floor = 0
+        sim.run(4)
+        self.assertEqual(sim.stats().delivered, 1)
+        self.assertEqual(len(sim.delivered), 2)
+
+    def test_measuring_does_not_disturb_the_simulation(self):
+        for cls in ALL_SCHEDULERS:
+            with self.subTest(scheduler=cls.name):
+                plain = Simulation(cls(), Config(), seed=6)
+                measured = Simulation(cls(), Config(), seed=6)
+                plain.run(90)
+                measured.run(45)
+                measured.start_measuring()
+                measured.run(45)
+
+                def snapshot(sim):
+                    return ([(p.origin, p.dest, p.spawn_time, p.board_time, p.done_time)
+                             for p in sim.passengers],
+                            [lift.position for lift in sim.lifts])
+
+                self.assertEqual(snapshot(plain), snapshot(measured))
+
+
 class ArrivalTests(unittest.TestCase):
     def test_same_seed_gives_every_algorithm_the_same_passengers(self):
         streams = []

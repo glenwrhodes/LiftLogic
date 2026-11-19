@@ -35,6 +35,19 @@ def traffic_level(name: str) -> tuple[str, float]:
     raise ValueError(f"unknown traffic level: {name}")
 
 
+def change_traffic(sims, name: str) -> None:
+    """Switch every building to a traffic level and measure it from now.
+
+    The stats restart so the panels show the new level alone, not a blend
+    with what came before. All buildings change on the same step, so they
+    carry on receiving identical passengers.
+    """
+    rate = traffic_level(name)[1]
+    for sim in sims:
+        sim.set_arrival_rate(rate)
+        sim.start_measuring()
+
+
 def next_traffic(name: str) -> str:
     return TRAFFIC_NAMES[(TRAFFIC_NAMES.index(name) + 1) % len(TRAFFIC_NAMES)]
 
@@ -145,8 +158,7 @@ def run_window(seed: int, speed: int, traffic: str = DEFAULT_TRAFFIC) -> int:
                     sims = make_sims(seed, traffic=traffic)     # keeps the traffic level
                 elif event.key == pygame.K_t:
                     traffic = next_traffic(traffic)
-                    for sim in sims:
-                        sim.set_arrival_rate(traffic_level(traffic)[1])
+                    change_traffic(sims, traffic)
                 elif event.key in (pygame.K_UP, pygame.K_DOWN):
                     step = 1 if event.key == pygame.K_UP else -1
                     index = SPEEDS.index(speed) + step

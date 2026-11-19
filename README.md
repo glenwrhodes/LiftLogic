@@ -52,7 +52,7 @@ Which algorithm does best depends on how busy the building is, so the traffic ca
 | Normal (default) | 0.8 |
 | Rush hour | 1.2 |
 
-Changing the level keeps the three buildings on identical passengers. The stats count everything since the start, so after changing level press R for a clean run at that level.
+Changing the level keeps the three buildings on identical passengers, and starts a new measurement: from that moment the stats panels cover the new level alone. Each panel says how long the current measurement has been running, for example "Measured for 02:00 of Rush hour traffic". The buildings themselves carry on as they are, so people already waiting from the old level are still there to be served.
 
 ### What LOOK does when the lifts are full
 
@@ -107,10 +107,12 @@ The first script builds `dist/LiftLogic-windows.zip` with PyInstaller. The secon
 
 ## What the stats mean
 
-- **Average wait**: the mean time from a passenger arriving to getting into a lift. People still waiting are counted with the time they have waited so far, so an algorithm cannot look good by leaving someone behind.
+All figures cover the current measurement, which starts at the beginning of the run and starts again each time the traffic level changes.
+
+- **Average wait**: the mean time from a passenger arriving to getting into a lift, for passengers who arrived during the measurement. People still waiting are counted with the time they have waited so far, so an algorithm cannot look good by leaving someone behind.
 - **Longest wait**: the worst single wait, counted the same way.
-- **Delivered**: passengers who have reached their floor.
-- **Waiting now**: passengers standing on a floor at this moment.
+- **Delivered**: passengers who reached their floor during the measurement.
+- **Waiting now**: everyone standing on a floor at this moment, whenever they arrived.
 
 ## Layout
 

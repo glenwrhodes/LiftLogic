@@ -128,7 +128,7 @@ class Renderer:
             self._text(surface, sim.scheduler.blurb, 26, DIM, (px + 4, 134))
             self._draw_building(surface, sim, px)
             best = worst > lowest and st.avg_wait == lowest
-            self._draw_stats(surface, st, px, best, worst)
+            self._draw_stats(surface, st, px, best, worst, traffic)
 
         footer_y = height - 24
         if hints:
@@ -222,7 +222,7 @@ class Renderer:
                 pygame.draw.line(surface, CAR, (inside.right - leaf_w, inside.top),
                                  (inside.right - leaf_w, inside.bottom - 1))
 
-    def _draw_stats(self, surface, st, px, best, worst):
+    def _draw_stats(self, surface, st, px, best, worst, traffic=""):
         box = pygame.Rect(px, 830, PANEL_W, 196)
         pygame.draw.rect(surface, PANEL, box, border_radius=14)
         self._text(surface, "AVERAGE WAIT", 26, DIM, (box.left + 24, box.top + 18))
@@ -233,6 +233,13 @@ class Renderer:
             badge.centery = big.centery - 4
             pygame.draw.rect(surface, GOOD, badge, border_radius=8)
             self._text(surface, "BEST", 26, PANEL, badge.center, "center")
+
+        # Say what the numbers cover: they restart when the traffic changes.
+        seconds = int(st.measured_for)
+        covers = f"Measured for {seconds // 60:02d}:{seconds % 60:02d}"
+        if traffic:
+            covers += f" of {traffic} traffic"
+        self._text(surface, covers, 24, DIM, (box.left + 24, box.top + 126))
 
         rows = (
             ("Longest wait", f"{st.max_wait:.0f}s"),
