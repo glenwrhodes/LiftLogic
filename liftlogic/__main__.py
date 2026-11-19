@@ -24,6 +24,8 @@ def main(argv=None) -> int:
                         help="which stream of passengers to use (default 7)")
     parser.add_argument("--speed", type=int, choices=app.SPEEDS, default=2,
                         help="simulated seconds per real second (default 2)")
+    parser.add_argument("--traffic", choices=app.TRAFFIC_NAMES, default=app.DEFAULT_TRAFFIC,
+                        help="how busy the building is (default normal)")
     parser.add_argument("--check", action="store_true",
                         help="start up without a window, run briefly, and exit")
     parser.add_argument("--record", metavar="FOLDER",
@@ -37,11 +39,11 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     if args.check:
-        return app.run_check(args.seed)
+        return app.run_check(args.seed, args.traffic)
     if args.record:
         return app.run_record(args.record, args.seconds, args.fps, args.speed,
-                              args.seed, args.overwrite)
-    return app.run_window(args.seed, args.speed)
+                              args.seed, args.overwrite, args.traffic)
+    return app.run_window(args.seed, args.speed, args.traffic)
 
 
 if __name__ == "__main__":

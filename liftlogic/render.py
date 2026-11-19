@@ -103,7 +103,7 @@ class Renderer:
 
     # --------------------------------------------------------------- draw
 
-    def draw(self, surface, sims, speed=1, paused=False, hints=False):
+    def draw(self, surface, sims, speed=1, paused=False, hints=False, traffic=""):
         surface.blit(self._background, (0, 0))
         width, height = CANVAS_SIZE
 
@@ -111,7 +111,10 @@ class Renderer:
         self._text(surface, "The same passengers, three ways to run the lifts",
                    30, DIM, (title.right + 24, title.bottom - 6), "bottomleft")
         now = sims[0].time
-        status = f"Time {int(now) // 60:02d}:{int(now) % 60:02d}    Speed {speed}x"
+        status = f"Time {int(now) // 60:02d}:{int(now) % 60:02d}"
+        if traffic:
+            status += f"    Traffic: {traffic}"
+        status += f"    Speed {speed}x"
         if paused:
             status += "    PAUSED"
         self._text(surface, status, 34, WHITE, (width - MARGIN, 34), "topright")
@@ -129,7 +132,7 @@ class Renderer:
 
         footer_y = height - 24
         if hints:
-            self._text(surface, "Space pause   Up/Down speed   R restart   Esc quit",
+            self._text(surface, "Space pause   T traffic   Up/Down speed   R restart   Esc quit",
                        24, DIM, (MARGIN, footer_y), "midleft")
         self._draw_legend(surface, width // 2, footer_y)
         self._text(surface, COPYRIGHT, 24, DIM, (width - MARGIN, footer_y), "midright")

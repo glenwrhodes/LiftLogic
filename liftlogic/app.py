@@ -17,10 +17,33 @@ STEPS_PER_SECOND = 60
 SPEEDS = (1, 2, 4, 8)
 FRAME_PATTERN = "frame_{:05d}.png"
 
+# Traffic levels: name on the command line, name on screen, passengers per second.
+TRAFFIC = (
+    ("quiet", "Quiet", 0.4),
+    ("normal", "Normal", 0.8),
+    ("rush", "Rush hour", 1.2),
+)
+TRAFFIC_NAMES = tuple(level[0] for level in TRAFFIC)
+DEFAULT_TRAFFIC = "normal"
 
-def make_sims(seed: int, config: Config | None = None) -> list[Simulation]:
+
+def traffic_level(name: str) -> tuple[str, float]:
+    """The on-screen label and arrival rate for a traffic level."""
+    for key, label, rate in TRAFFIC:
+        if key == name:
+            return label, rate
+    raise ValueError(f"unknown traffic level: {name}")
+
+
+def next_traffic(name: str) -> str:
+    return TRAFFIC_NAMES[(TRAFFIC_NAMES.index(name) + 1) % len(TRAFFIC_NAMES)]
+
+
+def make_sims(seed: int, config: Config | None = None,
+              traffic: str = DEFAULT_TRAFFIC) -> list[Simulation]:
     """One building per algorithm, all fed the same passengers."""
-    config = config or Config(dt=1.0 / STEPS_PER_SECOND)
+    if config is None:
+        config = Config(dt=1.0 / STEPS_PER_SECOND, arrival_rate=traffic_level(traffic)[1])
     return [Simulation(cls(), config, seed) for cls in ALL_SCHEDULERS]
 
 
@@ -33,27 +56,29 @@ def summary(sims) -> str:
     return "\n".join(parts)
 
 
-def run_check(seed: int) -> int:
+def run_check(seed: int, traffic: str = DEFAULT_TRAFFIC) -> int:
     """Start everything without a window, run briefly, draw once, and exit."""
     import pygame
     from .render import CANVAS_SIZE, Renderer
 
-    sims = make_sims(seed)
+    label, rate = traffic_level(traffic)
+    sims = make_sims(seed, traffic=traffic)
     for sim in sims:
         sim.run(60)
     canvas = pygame.Surface(CANVAS_SIZE)
-    Renderer().draw(canvas, sims)
+    Renderer().draw(canvas, sims, traffic=label)
     for sim in sims:
         if not sim.delivered:
             print(f"Lift Logic check FAILED: {sim.scheduler.name} delivered nobody")
             return 1
+    print(f"Traffic: {label} ({rate:g} passengers a second), seed {seed}, 60 simulated seconds")
     print(summary(sims))
     print("Lift Logic check OK")
     return 0
 
 
 def run_record(out_dir: str, seconds: float, fps: int, speed: int, seed: int,
-               overwrite: bool) -> int:
+               overwrite: bool, traffic: str = DEFAULT_TRAFFIC) -> int:
     """Save the run as numbered PNG frames, drawn in memory at a fixed step."""
     import pygame
     from .png import save_png
@@ -75,13 +100,14 @@ def run_record(out_dir: str, seconds: float, fps: int, speed: int, seed: int,
     for path in old:
         path.unlink()
 
-    sims = make_sims(seed)
+    label = traffic_level(traffic)[0]
+    sims = make_sims(seed, traffic=traffic)
     renderer = Renderer()
     canvas = pygame.Surface(CANVAS_SIZE)
     steps_per_frame = speed * STEPS_PER_SECOND // fps
     total = round(seconds * fps)
     for frame in range(total):
-        renderer.draw(canvas, sims, speed=speed)
+        renderer.draw(canvas, sims, speed=speed, traffic=label)
         save_png(canvas, out / FRAME_PATTERN.format(frame))
         for _ in range(steps_per_frame):
             for sim in sims:
@@ -93,7 +119,7 @@ def run_record(out_dir: str, seconds: float, fps: int, speed: int, seed: int,
     return 0
 
 
-def run_window(seed: int, speed: int) -> int:
+def run_window(seed: int, speed: int, traffic: str = DEFAULT_TRAFFIC) -> int:
     import pygame
     from .render import CANVAS_SIZE, Renderer
 
@@ -103,7 +129,7 @@ def run_window(seed: int, speed: int) -> int:
     renderer = Renderer()
     canvas = pygame.Surface(CANVAS_SIZE)
     clock = pygame.time.Clock()
-    sims = make_sims(seed)
+    sims = make_sims(seed, traffic=traffic)
     paused = False
     running = True
     while running:
@@ -116,7 +142,11 @@ def run_window(seed: int, speed: int) -> int:
                 elif event.key == pygame.K_SPACE:
                     paused = not paused
                 elif event.key == pygame.K_r:
-                    sims = make_sims(seed)
+                    sims = make_sims(seed, traffic=traffic)     # keeps the traffic level
+                elif event.key == pygame.K_t:
+                    traffic = next_traffic(traffic)
+                    for sim in sims:
+                        sim.set_arrival_rate(traffic_level(traffic)[1])
                 elif event.key in (pygame.K_UP, pygame.K_DOWN):
                     step = 1 if event.key == pygame.K_UP else -1
                     index = SPEEDS.index(speed) + step
@@ -125,7 +155,8 @@ def run_window(seed: int, speed: int) -> int:
             for _ in range(speed):
                 for sim in sims:
                     sim.step()
-        renderer.draw(canvas, sims, speed=speed, paused=paused, hints=True)
+        renderer.draw(canvas, sims, speed=speed, paused=paused, hints=True,
+                      traffic=traffic_level(traffic)[0])
 
         # Fit the canvas into the window, keeping its shape.
         win_w, win_h = window.get_size()

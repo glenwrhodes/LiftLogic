@@ -114,6 +114,67 @@ class LookTests(unittest.TestCase):
                     distance[p.id] = now
 
 
+class LookFullLiftTests(unittest.TestCase):
+    """What LOOK does when its lifts arrive full.
+
+    A sweep down starts at the top, so the upper floors fill the lift and it
+    passes the callers lower down. In traffic heavier than the lifts can
+    carry, the whole shortfall therefore lands on the lowest floors. That is
+    how the algorithm works, not a fault: these tests pin it down.
+    """
+
+    def test_full_lift_passes_a_low_caller_who_called_first(self):
+        sim = Simulation(Look(), quiet(capacity=2))
+        low = sim.add_passenger(1, 0)           # the first to call
+        high = [sim.add_passenger(5, 0), sim.add_passenger(5, 0)]
+        drain(sim)
+        # The lift went up to the farthest caller, filled there, and came
+        # down past floor 1 without stopping. It had to come back for them.
+        for p in high:
+            self.assertLess(p.done_time, low.board_time)
+
+    def test_lift_with_room_stops_for_the_same_caller(self):
+        sim = Simulation(Look(), quiet(capacity=3))
+        low = sim.add_passenger(1, 0)
+        high = [sim.add_passenger(5, 0), sim.add_passenger(5, 0)]
+        drain(sim)
+        for p in high:
+            self.assertLess(low.board_time, p.done_time)
+            self.assertAlmostEqual(low.done_time, p.done_time)
+
+    def test_in_heavy_traffic_only_full_lifts_pass_low_floor_down_callers(self):
+        for seed in (1, 2, 3):
+            with self.subTest(seed=seed):
+                sim = Simulation(Look(), Config(arrival_rate=1.6), seed=seed)
+                passed_full = passed_with_room = 0
+                before = [(lift.floor, lift.moving) for lift in sim.lifts]
+                for _ in range(60 * 600):
+                    sim.step()
+                    for i, lift in enumerate(sim.lifts):
+                        floor, moving = before[i]
+                        before[i] = (lift.floor, lift.moving)
+                        came_down_to_a_low_floor = (
+                            moving == -1 and lift.floor != floor and lift.floor in (1, 2))
+                        if not came_down_to_a_low_floor or lift.doors_open:
+                            continue
+                        if not any(p.direction == -1 for p in sim.waiting[lift.floor]):
+                            continue
+                        if lift.full:
+                            passed_full += 1
+                        elif lift.floor in Scheduler.open_calls(lift, sim):
+                            passed_with_room += 1
+                self.assertEqual(passed_with_room, 0)
+                self.assertGreater(passed_full, 30)
+
+                def average_down_wait(floors):
+                    waits = [p.wait(sim.time) for p in sim.passengers
+                             if p.origin in floors and p.direction == -1]
+                    return sum(waits) / len(waits)
+
+                self.assertGreater(average_down_wait((1, 2)),
+                                   5 * average_down_wait((5, 6, 7)))
+
+
 class SharedBehaviourTests(unittest.TestCase):
     def test_everyone_is_delivered_once_arrivals_stop(self):
         for cls in ALL_SCHEDULERS:

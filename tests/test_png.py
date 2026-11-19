@@ -75,8 +75,37 @@ class RecorderTests(unittest.TestCase):
             self.assertEqual(self.record(folder, fps=25), 2)
             self.assertEqual(list(Path(folder).iterdir()), [])
 
-    def test_check_mode_passes(self):
-        self.assertEqual(quietly(app.run_check, 7), 0)
+    def test_check_mode_passes_at_every_traffic_level(self):
+        for name in app.TRAFFIC_NAMES:
+            self.assertEqual(quietly(app.run_check, 7, name), 0)
+
+    def test_traffic_level_changes_what_is_recorded(self):
+        with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
+            quietly(app.run_record, a, 0.5, 20, 8, 7, False, "quiet")
+            quietly(app.run_record, b, 0.5, 20, 8, 7, False, "rush")
+            last = "frame_00009.png"
+            self.assertNotEqual((Path(a) / last).read_bytes(), (Path(b) / last).read_bytes())
+
+
+class TrafficLevelTests(unittest.TestCase):
+    def test_levels_get_busier_and_normal_is_the_default(self):
+        rates = [app.traffic_level(name)[1] for name in app.TRAFFIC_NAMES]
+        self.assertEqual(rates, sorted(rates))
+        self.assertEqual(len(set(rates)), 3)
+        self.assertEqual(app.DEFAULT_TRAFFIC, "normal")
+        self.assertEqual(app.make_sims(1)[0].arrival_rate, app.traffic_level("normal")[1])
+        self.assertEqual(app.make_sims(1, traffic="rush")[0].arrival_rate,
+                         app.traffic_level("rush")[1])
+
+    def test_the_key_cycles_through_all_levels_and_back(self):
+        seen = ["quiet"]
+        for _ in range(3):
+            seen.append(app.next_traffic(seen[-1]))
+        self.assertEqual(seen, ["quiet", "normal", "rush", "quiet"])
+
+    def test_unknown_level_is_an_error(self):
+        with self.assertRaises(ValueError):
+            app.traffic_level("gridlock")
 
 
 if __name__ == "__main__":

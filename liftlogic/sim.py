@@ -99,6 +99,7 @@ class Simulation:
         self.scheduler = scheduler
         self.seed = seed
         self.rng = random.Random(seed)
+        self.arrival_rate = self.config.arrival_rate
         self.time = 0.0
         self.ticks = 0
         self.lifts = [Lift(i, self.config.capacity) for i in range(self.config.lifts)]
@@ -110,8 +111,25 @@ class Simulation:
     # ----------------------------------------------------------- arrivals
 
     def _arrival_gap(self) -> float:
-        rate = self.config.arrival_rate
-        return self.rng.expovariate(rate) if rate > 0 else float("inf")
+        # Always draw from the generator, even when nobody is arriving, so the
+        # stream of passengers depends only on the seed and the rate changes.
+        gap = self.rng.expovariate(1.0)
+        return gap / self.arrival_rate if self.arrival_rate > 0 else float("inf")
+
+    def set_arrival_rate(self, rate: float) -> None:
+        """Change how busy the building is from now on (passengers per second)."""
+        if rate < 0:
+            raise ValueError("arrival rate cannot be negative")
+        old = self.arrival_rate
+        self.arrival_rate = rate
+        if rate <= 0:
+            self._next_arrival = float("inf")
+        elif old <= 0:
+            self._next_arrival = self.time + self._arrival_gap()
+        else:
+            # Arrivals are random, so the time left until the next one simply
+            # stretches or shrinks with the rate.
+            self._next_arrival = self.time + (self._next_arrival - self.time) * old / rate
 
     def _random_trip(self) -> tuple[int, int]:
         top = self.config.floors - 1

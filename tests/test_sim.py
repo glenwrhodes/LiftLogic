@@ -171,6 +171,45 @@ class ArrivalTests(unittest.TestCase):
             self.assertIn(p.origin, range(sim.config.floors))
             self.assertIn(p.dest, range(sim.config.floors))
 
+    def test_traffic_can_be_changed_while_running(self):
+        sim = Simulation(GoTo(None), Config(arrival_rate=0.4), seed=5)
+        sim.run(300)
+        quiet_count = len(sim.passengers)
+        sim.set_arrival_rate(1.2)
+        sim.run(300)
+        busy_count = len(sim.passengers) - quiet_count
+        self.assertGreater(quiet_count, 90)         # about 120 expected
+        self.assertLess(quiet_count, 150)
+        self.assertGreater(busy_count, 310)         # about 360 expected
+        self.assertLess(busy_count, 410)
+
+    def test_algorithms_still_share_passengers_after_a_traffic_change(self):
+        streams = []
+        for cls in ALL_SCHEDULERS:
+            sim = Simulation(cls(), Config(), seed=11)
+            sim.run(40)
+            sim.set_arrival_rate(1.2)
+            sim.run(40)
+            sim.set_arrival_rate(0.4)
+            sim.run(40)
+            streams.append([(p.origin, p.dest, p.spawn_time) for p in sim.passengers])
+        self.assertGreater(len(streams[0]), 40)
+        self.assertEqual(streams[0], streams[1])
+        self.assertEqual(streams[0], streams[2])
+
+    def test_arrivals_can_be_stopped_and_started_again(self):
+        sim = Simulation(GoTo(None), Config(), seed=5)
+        sim.run(30)
+        sim.set_arrival_rate(0)
+        count = len(sim.passengers)
+        sim.run(60)
+        self.assertEqual(len(sim.passengers), count)
+        sim.set_arrival_rate(1.0)
+        sim.run(60)
+        self.assertGreater(len(sim.passengers), count + 30)
+        with self.assertRaises(ValueError):
+            sim.set_arrival_rate(-1)
+
     def test_tiny_buildings_are_rejected(self):
         with self.assertRaises(ValueError):
             Simulation(GoTo(None), Config(floors=1))
