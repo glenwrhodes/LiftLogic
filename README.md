@@ -12,7 +12,19 @@ Three identical buildings are shown in cross-section. Each has 8 floors and 2 li
 
 Passengers are drawn green when they arrive and turn yellow, then red, the longer they wait. Riders are blue.
 
-## Running it
+## Download for Windows
+
+**[Download LiftLogic-windows.zip](https://github.com/glenwrhodes/LiftLogic/releases/latest/download/LiftLogic-windows.zip)**
+
+- **Needs:** Windows 10 or 11, 64-bit. Nothing else: Python is not required.
+- **To run:** unzip the file anywhere, open the `LiftLogic` folder and double-click `LiftLogic.exe`. Keep the `_internal` folder next to it.
+- **First run:** the program is not code-signed, so Windows may show "Windows protected your PC". Choose **More info**, then **Run anyway**.
+
+The link always points at the newest build. Every push to `main` is tested, built and published automatically, and the zip is unpacked and run before it is released. Older builds are on the [releases page](https://github.com/glenwrhodes/LiftLogic/releases).
+
+The options below work with the download too: use `LiftLogic.exe` in place of `python -m liftlogic`. It has no console window, so `--check` and `--record` print nothing there; `--check` reports through its exit code.
+
+## Running it from source
 
 It needs Python 3.10 or later and pygame (`pip install -r requirements.txt`).
 
@@ -83,6 +95,16 @@ Starts everything without opening a window, runs one simulated minute, draws a f
 python -m unittest discover -s tests -t .
 ```
 
+## Building the Windows version
+
+```
+pip install pyinstaller
+pwsh tools/build_windows.ps1
+pwsh tools/verify_package.ps1
+```
+
+The first script builds `dist/LiftLogic-windows.zip` with PyInstaller. The second unzips it into a new empty folder and runs the packaged program there in check mode and in record mode, and fails if either does not work. `.github/workflows/build.yml` runs the tests and both scripts on every push to `main`, then publishes the zip as a release.
+
 ## What the stats mean
 
 - **Average wait**: the mean time from a passenger arriving to getting into a lift. People still waiting are counted with the time they have waited so far, so an algorithm cannot look good by leaving someone behind.
@@ -100,5 +122,8 @@ python -m unittest discover -s tests -t .
 | `liftlogic/png.py` | PNG writer used by the recorder. |
 | `liftlogic/app.py` | Window, recording and check modes. |
 | `tests/` | Tests for all of the above except drawing. |
+| `run_liftlogic.py` | Entry point for the packaged Windows program. |
+| `tools/` | Scripts that build the Windows zip and verify it. |
+| `.github/workflows/build.yml` | Tests, builds, verifies and releases on every push to `main`. |
 
 © 2026 Tiny Moosh Games Inc.

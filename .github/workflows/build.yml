@@ -1,0 +1,72 @@
+name: Build and release
+
+# On every push to main: test from source, build the Windows version, prove
+# the packed zip works on its own, then publish it as a GitHub release.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write  # create the release and attach the zip
+
+concurrency:
+  group: build-and-release
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    name: Test, build and release (Windows x64)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: Install the requirements
+        run: python -m pip install -r requirements.txt
+
+      - name: Run the tests
+        run: python -m unittest discover -s tests -t .
+
+      - name: Run check mode from source
+        run: python -m liftlogic --check
+
+      - name: Install PyInstaller
+        run: python -m pip install "pyinstaller>=6.11,<7"
+
+      - name: Build the Windows version and pack the zip
+        shell: pwsh
+        run: ./tools/build_windows.ps1
+
+      - name: Unzip into an empty folder and run the packaged program
+        shell: pwsh
+        timeout-minutes: 10
+        run: ./tools/verify_package.ps1 -Zip dist/LiftLogic-windows.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LiftLogic-windows
+          path: dist/LiftLogic-windows.zip
+          if-no-files-found: error
+
+      - name: Publish the release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="build-${GITHUB_RUN_NUMBER}"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" \
+              --target "$GITHUB_SHA" \
+              --title "Lift Logic build ${GITHUB_RUN_NUMBER}" \
+              --notes "Windows 10 or 11, 64-bit. Download LiftLogic-windows.zip, unzip it and run LiftLogic.exe in the LiftLogic folder. No Python needed. Built and tested automatically from commit ${GITHUB_SHA}." \
+              --latest
+          fi
+          gh release upload "$tag" dist/LiftLogic-windows.zip --clobber

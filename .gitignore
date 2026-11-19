@@ -2,3 +2,8 @@ __pycache__/
 *.pyc
 frames*/
 *.mp4
+
+# PyInstaller output (tools/build_windows.ps1)
+build/
+dist/
+*.spec
